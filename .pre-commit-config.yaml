@@ -1,0 +1,43 @@
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+
+  - repo: local
+    hooks:
+      - id: gofmt
+        name: gofmt
+        entry: gofmt -w
+        language: system
+        types: [go]
+
+      - id: golangci-lint-api
+        name: golangci-lint api
+        entry: bash -c 'cd api && golangci-lint run'
+        language: system
+        pass_filenames: false
+        files: ^api/
+
+      - id: golangci-lint-racing
+        name: golangci-lint racing
+        entry: bash -c 'cd racing && golangci-lint run'
+        language: system
+        pass_filenames: false
+        files: ^racing/
+
+      - id: go-test-api
+        name: go test api
+        entry: bash -c 'cd api && go test ./...'
+        language: system
+        pass_filenames: false
+        files: ^api/
+
+      - id: go-test-racing
+        name: go test racing
+        entry: bash -c 'cd racing && go test ./...'
+        language: system
+        pass_filenames: false
+        files: ^racing/

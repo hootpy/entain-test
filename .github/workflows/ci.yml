@@ -1,0 +1,92 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+permissions:
+  contents: read
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: 1.26.1
+          cache: true
+          cache-dependency-path: |
+            api/go.sum
+            racing/go.sum
+
+      - name: Add Go bin to PATH
+        run: echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+
+      - name: Install protoc
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y protobuf-compiler
+
+      - name: Install proto tools
+        run: |
+          go install github.com/grpc-ecosystem/grpc-gateway/v2/protoc-gen-grpc-gateway@latest
+          go install github.com/grpc-ecosystem/grpc-gateway/v2/protoc-gen-openapiv2@latest
+          go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
+          go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
+
+      - name: Check formatting api
+        run: |
+          cd api
+          files=$(find . -name '*.go' -print0 | xargs -0 gofmt -l)
+          if [ -n "$files" ]; then
+            echo "The following api files are not formatted:"
+            echo "$files"
+            exit 1
+          fi
+
+      - name: Check formatting racing
+        run: |
+          cd racing
+          files=$(find . -name '*.go' -print0 | xargs -0 gofmt -l)
+          if [ -n "$files" ]; then
+            echo "The following racing files are not formatted:"
+            echo "$files"
+            exit 1
+          fi
+
+      - name: Lint api
+        uses: golangci/golangci-lint-action@v9
+        with:
+          working-directory: api
+
+      - name: Lint racing
+        uses: golangci/golangci-lint-action@v9
+        with:
+          working-directory: racing
+
+#      - name: Generate api
+#        run: |
+#          cd api
+#          go generate ./...
+
+#      - name: Test api
+#        run: |
+#          cd api
+#          go test ./...
+
+#      - name: Generate racing
+#        run: |
+#          cd racing
+#          go generate ./...
+
+      - name: Test racing
+        run: |
+          cd racing
+          go test ./...
