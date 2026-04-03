@@ -225,3 +225,322 @@ func TestRacingService_ListRaces_NoVisibleFilter(t *testing.T) {
 		t.Fatalf("Expected 1 hidden race, got %d", hiddenCount)
 	}
 }
+
+func TestRacingService_ListRaces_OrderByTime(t *testing.T) {
+	dbConn, err := sql.Open("sqlite3", ":memory:")
+	if err != nil {
+		t.Fatalf("sql.Open() error = %v", err)
+	}
+	defer func() { _ = dbConn.Close() }()
+
+	_, err = dbConn.Exec(`
+		CREATE TABLE races (
+			id INTEGER PRIMARY KEY,
+			meeting_id INTEGER,
+			name TEXT,
+			number INTEGER,
+			visible INTEGER,
+			advertised_start_time DATETIME
+		)
+	`)
+	if err != nil {
+		t.Fatalf("create table error = %v", err)
+	}
+
+	// Create races with different start times
+	start1 := time.Date(2026, 3, 31, 10, 0, 0, 0, time.UTC)
+	start2 := time.Date(2026, 3, 31, 12, 0, 0, 0, time.UTC)
+	start3 := time.Date(2026, 3, 31, 11, 0, 0, 0, time.UTC)
+
+	_, err = dbConn.Exec(`
+		INSERT INTO races (id, meeting_id, name, number, visible, advertised_start_time)
+		VALUES (?, ?, ?, ?, ?, ?), (?, ?, ?, ?, ?, ?), (?, ?, ?, ?, ?, ?)
+	`,
+		1, 100, "Early Race", 1, true, start1,
+		2, 200, "Late Race", 2, true, start2,
+		3, 300, "Mid Race", 3, true, start3,
+	)
+	if err != nil {
+		t.Fatalf("insert races error = %v", err)
+	}
+
+	racesRepo := db.NewRacesRepo(dbConn)
+	service := NewRacingService(racesRepo)
+
+	// Test ascending order (default)
+	request := &racing.ListRacesRequest{
+		Filter: &racing.ListRacesRequestFilter{},
+	}
+
+	response, err := service.ListRaces(context.TODO(), request)
+	if err != nil {
+		t.Fatalf("ListRaces() error = %v", err)
+	}
+
+	if len(response.Races) != 3 {
+		t.Fatalf("ListRaces() returned %d races, want 3", len(response.Races))
+	}
+
+	// Verify ascending order by start time
+	expectedIds := []int64{1, 3, 2} // Early, Mid, Late
+	for i, race := range response.Races {
+		if race.Id != expectedIds[i] {
+			t.Fatalf("response.Races[%d].Id = %d, want %d", i, race.Id, expectedIds[i])
+		}
+	}
+
+	// Test descending order
+	order := "time_desc"
+	request = &racing.ListRacesRequest{
+		Filter: &racing.ListRacesRequestFilter{
+			Order: &order,
+		},
+	}
+
+	response, err = service.ListRaces(context.TODO(), request)
+	if err != nil {
+		t.Fatalf("ListRaces() error = %v", err)
+	}
+
+	// Verify descending order by start time
+	expectedIds = []int64{2, 3, 1} // Late, Mid, Early
+	for i, race := range response.Races {
+		if race.Id != expectedIds[i] {
+			t.Fatalf("response.Races[%d].Id = %d, want %d", i, race.Id, expectedIds[i])
+		}
+	}
+}
+
+func TestRacingService_ListRaces_OrderByName(t *testing.T) {
+	dbConn, err := sql.Open("sqlite3", ":memory:")
+	if err != nil {
+		t.Fatalf("sql.Open() error = %v", err)
+	}
+	defer func() { _ = dbConn.Close() }()
+
+	_, err = dbConn.Exec(`
+		CREATE TABLE races (
+			id INTEGER PRIMARY KEY,
+			meeting_id INTEGER,
+			name TEXT,
+			number INTEGER,
+			visible INTEGER,
+			advertised_start_time DATETIME
+		)
+	`)
+	if err != nil {
+		t.Fatalf("create table error = %v", err)
+	}
+
+	start := time.Date(2026, 3, 31, 10, 0, 0, 0, time.UTC)
+
+	_, err = dbConn.Exec(`
+		INSERT INTO races (id, meeting_id, name, number, visible, advertised_start_time)
+		VALUES (?, ?, ?, ?, ?, ?), (?, ?, ?, ?, ?, ?), (?, ?, ?, ?, ?, ?)
+	`,
+		1, 100, "Zebra Race", 1, true, start,
+		2, 200, "Alpha Race", 2, true, start,
+		3, 300, "Beta Race", 3, true, start,
+	)
+	if err != nil {
+		t.Fatalf("insert races error = %v", err)
+	}
+
+	racesRepo := db.NewRacesRepo(dbConn)
+	service := NewRacingService(racesRepo)
+
+	// Test ascending order by name
+	order := "name_asc"
+	request := &racing.ListRacesRequest{
+		Filter: &racing.ListRacesRequestFilter{
+			Order: &order,
+		},
+	}
+
+	response, err := service.ListRaces(context.TODO(), request)
+	if err != nil {
+		t.Fatalf("ListRaces() error = %v", err)
+	}
+
+	if len(response.Races) != 3 {
+		t.Fatalf("ListRaces() returned %d races, want 3", len(response.Races))
+	}
+
+	// Verify ascending order by name
+	expectedNames := []string{"Alpha Race", "Beta Race", "Zebra Race"}
+	for i, race := range response.Races {
+		if race.Name != expectedNames[i] {
+			t.Fatalf("response.Races[%d].Name = %s, want %s", i, race.Name, expectedNames[i])
+		}
+	}
+
+	// Test descending order by name
+	order = "name_desc"
+	request = &racing.ListRacesRequest{
+		Filter: &racing.ListRacesRequestFilter{
+			Order: &order,
+		},
+	}
+
+	response, err = service.ListRaces(context.TODO(), request)
+	if err != nil {
+		t.Fatalf("ListRaces() error = %v", err)
+	}
+
+	// Verify descending order by name
+	expectedNames = []string{"Zebra Race", "Beta Race", "Alpha Race"}
+	for i, race := range response.Races {
+		if race.Name != expectedNames[i] {
+			t.Fatalf("response.Races[%d].Name = %s, want %s", i, race.Name, expectedNames[i])
+		}
+	}
+}
+
+func TestRacingService_ListRaces_OrderByMeetingId(t *testing.T) {
+	dbConn, err := sql.Open("sqlite3", ":memory:")
+	if err != nil {
+		t.Fatalf("sql.Open() error = %v", err)
+	}
+	defer func() { _ = dbConn.Close() }()
+
+	_, err = dbConn.Exec(`
+		CREATE TABLE races (
+			id INTEGER PRIMARY KEY,
+			meeting_id INTEGER,
+			name TEXT,
+			number INTEGER,
+			visible INTEGER,
+			advertised_start_time DATETIME
+		)
+	`)
+	if err != nil {
+		t.Fatalf("create table error = %v", err)
+	}
+
+	start := time.Date(2026, 3, 31, 10, 0, 0, 0, time.UTC)
+
+	_, err = dbConn.Exec(`
+		INSERT INTO races (id, meeting_id, name, number, visible, advertised_start_time)
+		VALUES (?, ?, ?, ?, ?, ?), (?, ?, ?, ?, ?, ?), (?, ?, ?, ?, ?, ?)
+	`,
+		1, 300, "Race 1", 1, true, start,
+		2, 100, "Race 2", 2, true, start,
+		3, 200, "Race 3", 3, true, start,
+	)
+	if err != nil {
+		t.Fatalf("insert races error = %v", err)
+	}
+
+	racesRepo := db.NewRacesRepo(dbConn)
+	service := NewRacingService(racesRepo)
+
+	// Test ascending order by meeting ID
+	order := "meeting_asc"
+	request := &racing.ListRacesRequest{
+		Filter: &racing.ListRacesRequestFilter{
+			Order: &order,
+		},
+	}
+
+	response, err := service.ListRaces(context.TODO(), request)
+	if err != nil {
+		t.Fatalf("ListRaces() error = %v", err)
+	}
+
+	if len(response.Races) != 3 {
+		t.Fatalf("ListRaces() returned %d races, want 3", len(response.Races))
+	}
+
+	// Verify ascending order by meeting ID
+	expectedIds := []int64{2, 3, 1} // Meeting 100, 200, 300
+	for i, race := range response.Races {
+		if race.Id != expectedIds[i] {
+			t.Fatalf("response.Races[%d].Id = %d, want %d", i, race.Id, expectedIds[i])
+		}
+	}
+
+	// Test descending order by meeting ID
+	order = "meeting_desc"
+	request = &racing.ListRacesRequest{
+		Filter: &racing.ListRacesRequestFilter{
+			Order: &order,
+		},
+	}
+
+	response, err = service.ListRaces(context.TODO(), request)
+	if err != nil {
+		t.Fatalf("ListRaces() error = %v", err)
+	}
+
+	// Verify descending order by meeting ID
+	expectedIds = []int64{1, 3, 2} // Meeting 300, 200, 100
+	for i, race := range response.Races {
+		if race.Id != expectedIds[i] {
+			t.Fatalf("response.Races[%d].Id = %d, want %d", i, race.Id, expectedIds[i])
+		}
+	}
+}
+
+func TestRacingService_ListRaces_InvalidOrder(t *testing.T) {
+	dbConn, err := sql.Open("sqlite3", ":memory:")
+	if err != nil {
+		t.Fatalf("sql.Open() error = %v", err)
+	}
+	defer func() { _ = dbConn.Close() }()
+
+	_, err = dbConn.Exec(`
+		CREATE TABLE races (
+			id INTEGER PRIMARY KEY,
+			meeting_id INTEGER,
+			name TEXT,
+			number INTEGER,
+			visible INTEGER,
+			advertised_start_time DATETIME
+		)
+	`)
+	if err != nil {
+		t.Fatalf("create table error = %v", err)
+	}
+
+	start1 := time.Date(2026, 3, 31, 10, 0, 0, 0, time.UTC)
+	start2 := time.Date(2026, 3, 31, 12, 0, 0, 0, time.UTC)
+	start3 := time.Date(2026, 3, 31, 11, 0, 0, 0, time.UTC)
+
+	_, err = dbConn.Exec(`
+		INSERT INTO races (id, meeting_id, name, number, visible, advertised_start_time)
+		VALUES (?, ?, ?, ?, ?, ?), (?, ?, ?, ?, ?, ?), (?, ?, ?, ?, ?, ?)
+	`,
+		1, 100, "Early Race", 1, true, start1,
+		2, 200, "Late Race", 2, true, start2,
+		3, 300, "Mid Race", 3, true, start3,
+	)
+	if err != nil {
+		t.Fatalf("insert races error = %v", err)
+	}
+
+	racesRepo := db.NewRacesRepo(dbConn)
+	service := NewRacingService(racesRepo)
+
+	order := "invalid_order"
+	request := &racing.ListRacesRequest{
+		Filter: &racing.ListRacesRequestFilter{
+			Order: &order,
+		},
+	}
+
+	response, err := service.ListRaces(context.TODO(), request)
+	if err != nil {
+		t.Fatalf("ListRaces() error = %v", err)
+	}
+
+	if len(response.Races) != 3 {
+		t.Fatalf("ListRaces() returned %d races, want 3", len(response.Races))
+	}
+
+	expectedIds := []int64{1, 3, 2}
+	for i, race := range response.Races {
+		if race.Id != expectedIds[i] {
+			t.Fatalf("response.Races[%d].Id = %d, want %d", i, race.Id, expectedIds[i])
+		}
+	}
+}
