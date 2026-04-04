@@ -67,6 +67,9 @@ func (r *racesRepo) applyFilter(query string, filter *racing.ListRacesRequestFil
 		clauses []string
 		args    []interface{}
 	)
+	currentTime := time.Now().UTC()
+
+	args = append(args, currentTime)
 
 	if filter == nil {
 		return query, args
@@ -83,6 +86,11 @@ func (r *racesRepo) applyFilter(query string, filter *racing.ListRacesRequestFil
 	if filter.Visible != nil {
 		clauses = append(clauses, "visible = ?")
 		args = append(args, *filter.Visible)
+	}
+
+	if filter.Status != nil {
+		clauses = append(clauses, "status = ?")
+		args = append(args, strings.ToUpper(*filter.Status))
 	}
 
 	if len(clauses) != 0 {
@@ -120,8 +128,9 @@ func (m *racesRepo) scanRaces(
 	for rows.Next() {
 		var race racing.Race
 		var advertisedStart time.Time
+		var status string
 
-		if err := rows.Scan(&race.Id, &race.MeetingId, &race.Name, &race.Number, &race.Visible, &advertisedStart); err != nil {
+		if err := rows.Scan(&race.Id, &race.MeetingId, &race.Name, &race.Number, &race.Visible, &advertisedStart, &status); err != nil {
 			if err == sql.ErrNoRows {
 				return nil, nil
 			}
@@ -135,6 +144,7 @@ func (m *racesRepo) scanRaces(
 		}
 
 		race.AdvertisedStartTime = ts
+		race.Status = status
 
 		races = append(races, &race)
 	}
