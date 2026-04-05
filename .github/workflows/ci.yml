@@ -25,6 +25,7 @@ jobs:
           cache-dependency-path: |
             api/go.sum
             racing/go.sum
+            sports/go.sum
 
       - name: Add Go bin to PATH
         run: echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
@@ -61,6 +62,16 @@ jobs:
             exit 1
           fi
 
+      - name: Check formatting sports
+        run: |
+          cd sports
+          files=$(find . -name '*.go' -print0 | xargs -0 gofmt -l)
+          if [ -n "$files" ]; then
+            echo "The following sports files are not formatted:"
+            echo "$files"
+            exit 1
+          fi
+
       - name: Lint api
         uses: golangci/golangci-lint-action@v9
         with:
@@ -70,6 +81,11 @@ jobs:
         uses: golangci/golangci-lint-action@v9
         with:
           working-directory: racing
+
+      - name: Lint sports
+        uses: golangci/golangci-lint-action@v9
+        with:
+          working-directory: sports
 
 #      - name: Generate api
 #        run: |
@@ -89,4 +105,9 @@ jobs:
       - name: Test racing
         run: |
           cd racing
+          go test ./...
+
+      - name: Test sports
+        run: |
+          cd sports
           go test ./...
