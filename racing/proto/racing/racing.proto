@@ -26,6 +26,7 @@ message ListRacesRequestFilter {
   repeated int64 meeting_ids = 1;
   optional bool visible = 2;
   optional string order = 3;
+  optional string status = 4;
 }
 
 /* Resources */
@@ -44,4 +45,6 @@ message Race {
   bool visible = 5;
   // AdvertisedStartTime is the time the race is advertised to run.
   google.protobuf.Timestamp advertised_start_time = 6;
+  // Status represents the derived state of the race.
+  string status = 7;
 }
