@@ -544,3 +544,127 @@ func TestRacingService_ListRaces_InvalidOrder(t *testing.T) {
 		}
 	}
 }
+
+func TestRacingService_GetRace_Found(t *testing.T) {
+	dbConn, err := sql.Open("sqlite3", ":memory:")
+	if err != nil {
+		t.Fatalf("sql.Open() error = %v", err)
+	}
+	defer func() { _ = dbConn.Close() }()
+
+	_, err = dbConn.Exec(`
+		CREATE TABLE races (
+			id INTEGER PRIMARY KEY,
+			meeting_id INTEGER,
+			name TEXT,
+			number INTEGER,
+			visible INTEGER,
+			advertised_start_time DATETIME
+		)
+	`)
+	if err != nil {
+		t.Fatalf("create table error = %v", err)
+	}
+
+	start := time.Date(2026, 3, 31, 10, 0, 0, 0, time.UTC)
+
+	_, err = dbConn.Exec(`
+		INSERT INTO races (id, meeting_id, name, number, visible, advertised_start_time)
+		VALUES (?, ?, ?, ?, ?, ?)
+	`,
+		1, 100, "Race One", 1, true, start,
+	)
+	if err != nil {
+		t.Fatalf("insert races error = %v", err)
+	}
+
+	racesRepo := db.NewRacesRepo(dbConn)
+	service := NewRacingService(racesRepo)
+
+	response, err := service.GetRace(context.TODO(), &racing.GetRaceRequest{Id: 1})
+	if err != nil {
+		t.Fatalf("GetRace() error = %v", err)
+	}
+
+	if response == nil {
+		t.Fatal("GetRace() response is nil")
+	}
+
+	if response.Race == nil {
+		t.Fatal("GetRace().Race is nil")
+	}
+
+	if response.Race.Id != 1 {
+		t.Fatalf("GetRace().Race.Id = %d, want 1", response.Race.Id)
+	}
+
+	if response.Race.MeetingId != 100 {
+		t.Fatalf("GetRace().Race.MeetingId = %d, want 100", response.Race.MeetingId)
+	}
+
+	if response.Race.Name != "Race One" {
+		t.Fatalf("GetRace().Race.Name = %q, want %q", response.Race.Name, "Race One")
+	}
+
+	if response.Race.Number != 1 {
+		t.Fatalf("GetRace().Race.Number = %d, want 1", response.Race.Number)
+	}
+
+	if !response.Race.Visible {
+		t.Fatal("GetRace().Race.Visible = false, want true")
+	}
+
+	if response.Race.AdvertisedStartTime == nil {
+		t.Fatal("GetRace().Race.AdvertisedStartTime is nil")
+	}
+}
+
+func TestRacingService_GetRace_NotFound(t *testing.T) {
+	dbConn, err := sql.Open("sqlite3", ":memory:")
+	if err != nil {
+		t.Fatalf("sql.Open() error = %v", err)
+	}
+	defer func() { _ = dbConn.Close() }()
+
+	_, err = dbConn.Exec(`
+		CREATE TABLE races (
+			id INTEGER PRIMARY KEY,
+			meeting_id INTEGER,
+			name TEXT,
+			number INTEGER,
+			visible INTEGER,
+			advertised_start_time DATETIME
+		)
+	`)
+	if err != nil {
+		t.Fatalf("create table error = %v", err)
+	}
+
+	start := time.Date(2026, 3, 31, 10, 0, 0, 0, time.UTC)
+
+	_, err = dbConn.Exec(`
+		INSERT INTO races (id, meeting_id, name, number, visible, advertised_start_time)
+		VALUES (?, ?, ?, ?, ?, ?)
+	`,
+		1, 100, "Race One", 1, true, start,
+	)
+	if err != nil {
+		t.Fatalf("insert races error = %v", err)
+	}
+
+	racesRepo := db.NewRacesRepo(dbConn)
+	service := NewRacingService(racesRepo)
+
+	response, err := service.GetRace(context.TODO(), &racing.GetRaceRequest{Id: 999})
+	if err != nil {
+		t.Fatalf("GetRace() error = %v", err)
+	}
+
+	if response == nil {
+		t.Fatal("GetRace() response is nil")
+	}
+
+	if response.Race != nil {
+		t.Fatalf("GetRace().Race = %#v, want nil", response.Race)
+	}
+}

@@ -2,6 +2,7 @@ package db
 
 const (
 	racesList = "list"
+	raceGet   = "get"
 )
 
 func getRaceQueries() map[string]string {
@@ -23,6 +24,25 @@ func getRaceQueries() map[string]string {
 			)
 			SELECT *
 			FROM r
+		`,
+		raceGet: `
+			WITH r AS (
+				SELECT
+					id,
+					meeting_id,
+					name,
+					number,
+					visible,
+					advertised_start_time,
+					CASE
+						WHEN datetime(advertised_start_time) <= datetime(?) THEN 'CLOSED'
+						ELSE 'OPEN'
+					END AS status
+				FROM races
+			)
+			SELECT *
+			FROM r
+			WHERE id = ?
 		`,
 	}
 }

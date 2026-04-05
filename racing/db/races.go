@@ -2,6 +2,7 @@ package db
 
 import (
 	"database/sql"
+	"errors"
 	"strings"
 	"sync"
 	"time"
@@ -19,6 +20,9 @@ type RacesRepo interface {
 
 	// List will return a list of races.
 	List(filter *racing.ListRacesRequestFilter) ([]*racing.Race, error)
+
+	// Get will return a race by ID.
+	Get(req *racing.GetRaceRequest) (*racing.Race, error)
 }
 
 type racesRepo struct {
@@ -60,6 +64,13 @@ func (r *racesRepo) List(filter *racing.ListRacesRequestFilter) ([]*racing.Race,
 	}
 
 	return r.scanRaces(rows)
+}
+
+func (r *racesRepo) Get(req *racing.GetRaceRequest) (*racing.Race, error) {
+	query := getRaceQueries()[raceGet]
+	row := r.db.QueryRow(query, time.Now().UTC(), req.Id)
+
+	return r.scanRace(row)
 }
 
 func (r *racesRepo) applyFilter(query string, filter *racing.ListRacesRequestFilter) (string, []interface{}) {
@@ -120,7 +131,7 @@ func (r *racesRepo) applyFilter(query string, filter *racing.ListRacesRequestFil
 	return query, args
 }
 
-func (m *racesRepo) scanRaces(
+func (r *racesRepo) scanRaces(
 	rows *sql.Rows,
 ) ([]*racing.Race, error) {
 	var races []*racing.Race
@@ -131,7 +142,7 @@ func (m *racesRepo) scanRaces(
 		var status string
 
 		if err := rows.Scan(&race.Id, &race.MeetingId, &race.Name, &race.Number, &race.Visible, &advertisedStart, &status); err != nil {
-			if err == sql.ErrNoRows {
+			if errors.Is(err, sql.ErrNoRows) {
 				return nil, nil
 			}
 
@@ -150,4 +161,28 @@ func (m *racesRepo) scanRaces(
 	}
 
 	return races, nil
+}
+
+func (r *racesRepo) scanRace(row *sql.Row) (*racing.Race, error) {
+	race := &racing.Race{}
+	var advertisedStart time.Time
+	var status string
+
+	if err := row.Scan(&race.Id, &race.MeetingId, &race.Name, &race.Number, &race.Visible, &advertisedStart, &status); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, nil
+		}
+
+		return nil, err
+	}
+
+	ts, err := ptypes.TimestampProto(advertisedStart)
+	if err != nil {
+		return nil, err
+	}
+
+	race.AdvertisedStartTime = ts
+	race.Status = status
+
+	return race, nil
 }
