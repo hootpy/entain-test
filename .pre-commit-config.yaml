@@ -28,6 +28,13 @@ repos:
         pass_filenames: false
         files: ^racing/
 
+      - id: golangci-lint-sports
+        name: golangci-lint sports
+        entry: bash -c 'cd sports && golangci-lint run'
+        language: system
+        pass_filenames: false
+        files: ^sports/
+
       - id: go-test-api
         name: go test api
         entry: bash -c 'cd api && go test ./...'
@@ -41,3 +48,10 @@ repos:
         language: system
         pass_filenames: false
         files: ^racing/
+
+      - id: go-test-sports
+        name: go test sports
+        entry: bash -c 'cd sports && go test ./...'
+        language: system
+        pass_filenames: false
+        files: ^sports/
